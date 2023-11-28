@@ -8,10 +8,12 @@ import org.http4s.dsl.io._
 import org.http4s.server.Router
 import cats.effect.unsafe.implicits.global
 import wiggly.CloudFunction.httpApp
-
-import java.io.{BufferedReader, File, InputStreamReader}
+import java.io.File
 import scala.io.Source
 import scala.util.Try
+import pureconfig.{ConfigReader, ConfigSource}
+import pureconfig.generic.semiauto.deriveReader
+import pureconfig.module.catseffect.syntax._
 
 object CloudFunction {
 
@@ -35,10 +37,8 @@ object CloudFunction {
 
   def logResource(name: String): IO[Unit] = {
     val resource = Try(getClass.getClassLoader.getResource(name))
-    val path = resource.map(_.getPath)
+//    val path = resource.map(_.getPath)
     val sr = resource.flatMap(r => Try(Source.createBufferedSource(r.openStream())))
-
-
 
     for {
       contentStream <- IO.fromTry(sr)
@@ -46,6 +46,8 @@ object CloudFunction {
     } yield ()
   }
 
+  final case class Config(log: String)
+  implicit val configReader: ConfigReader[Config] = deriveReader[Config]
 
   val httpApp = Router("/" -> HttpRoutes.of[IO] {
     case GET -> Root / "hello" =>
@@ -59,6 +61,9 @@ object CloudFunction {
 
         _ <- logResource("application.conf")
 
+        config <- ConfigSource.resources("application.conf", getClass.getClassLoader).loadF[IO, Config]()
+
+        _ <- IO.delay(println(s"config: $config"))
         _ <- IO.delay(println("Working..."))
         result <- Ok()
       } yield result
