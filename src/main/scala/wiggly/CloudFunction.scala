@@ -9,7 +9,7 @@ import org.http4s.server.Router
 import cats.effect.unsafe.implicits.global
 import wiggly.CloudFunction.httpApp
 
-import java.io.File
+import java.io.{BufferedReader, File, InputStreamReader}
 import scala.io.Source
 import scala.util.Try
 
@@ -33,6 +33,20 @@ object CloudFunction {
     } yield ()
   }
 
+  def logResource(name: String): IO[Unit] = {
+    val resource = Try(getClass.getClassLoader.getResource(name))
+    val path = resource.map(_.getPath)
+    val sr = resource.flatMap(r => Try(Source.createBufferedSource(r.openStream())))
+
+
+
+    for {
+      contentStream <- IO.fromTry(sr)
+      _ <- IO.delay(println(s"CONTENT\n: ${contentStream.getLines().toList.mkString("\n")}"))
+    } yield ()
+  }
+
+
   val httpApp = Router("/" -> HttpRoutes.of[IO] {
     case GET -> Root / "hello" =>
       for {
@@ -42,6 +56,9 @@ object CloudFunction {
         _ <- resourceInfo("application.conf")
         _ <- resourceInfo("test.txt")
         _ <- resourceInfo("remove.txt")
+
+        _ <- logResource("application.conf")
+
         _ <- IO.delay(println("Working..."))
         result <- Ok()
       } yield result
